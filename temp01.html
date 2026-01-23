@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>객체지향프로그래밍</title>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script>
+        class Config {
+            static CONSTANTS = {
+                ALIGN_CENTER: 'center',
+                COLOR_BACKGROUND: 'rgba(8, 8, 8, 1)', 
+                COLOR_TEXT_MAIN: 'rgba(136, 136, 136, 1)' 
+            };
+
+            static STYLES = {
+                BODY: {
+                    margin: { value: 0, unit: '' },
+                    height: { value: 100, unit: 'vh' },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: this.CONSTANTS.ALIGN_CENTER,
+                    alignItems: this.CONSTANTS.ALIGN_CENTER,
+                    backgroundColor: this.CONSTANTS.COLOR_BACKGROUND,
+                    color: this.CONSTANTS.COLOR_TEXT_MAIN,
+                    fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                    overflow: 'hidden',
+                    userSelect: 'none'
+                },
+                TIMESTAMP: {
+                    fontSize: { value: 16, unit: 'px' },
+                    fontWeight: 500,
+                    fontVariantNumeric: 'tabular-nums',
+                    textAlign: this.CONSTANTS.ALIGN_CENTER,
+                    letterSpacing: { value: 0.05, unit: 'em' },
+                    position: 'relative', 
+                    width: 'fit-content', 
+                    margin: '0 auto',     
+                    zIndex: 10            
+                },
+                DATE_INFO: {
+                    marginTop: { value: 8, unit: 'px' },
+                    fontSize: { value: 12, unit: 'px' },
+                    fontWeight: 400,
+                    fontVariantNumeric: 'tabular-nums',
+                    textAlign: this.CONSTANTS.ALIGN_CENTER,
+                    opacity: 0.8
+                },
+                FLOATING_MESSAGE: {
+                    position: 'absolute',
+                    top: { value: 45, unit: '%' }, 
+                    left: { value: 50, unit: '%' },
+                    transform: 'translateX(-50%)', 
+                    fontSize: { value: 14, unit: 'px' },
+                    fontWeight: 600,
+                    color: 'rgba(200, 200, 200, 1)',
+                    pointerEvents: 'none', 
+                    opacity: 0, 
+                    whiteSpace: 'nowrap',
+                    zIndex: 100 
+                },
+                DROP_MESSAGE: {
+                    position: 'absolute',
+                    top: { value: 55, unit: '%' }, 
+                    left: { value: 50, unit: '%' },
+                    transform: 'translateX(-50%)', 
+                    fontSize: { value: 12, unit: 'px' }, 
+                    fontWeight: 400,
+                    color: this.CONSTANTS.COLOR_TEXT_MAIN, 
+                    pointerEvents: 'none',
+                    opacity: 0,
+                    whiteSpace: 'nowrap',
+                    zIndex: 100
+                },
+                HISTORY_WRAPPER: {
+                    position: 'absolute',
+                    top: { value: 0, unit: 'px' }, 
+                    right: { value: 50, unit: '%' }, 
+                    marginRight: { value: 80, unit: 'px' }, 
+                    height: { value: 100, unit: 'vh' }, 
+                    display: 'flex',
+                    flexDirection: 'row', 
+                    justifyContent: 'flex-end', 
+                    alignItems: 'center',
+                    gap: { value: 15, unit: 'px' },
+                    pointerEvents: 'none'
+                },
+                HISTORY_ITEM: {
+                    fontSize: { value: 16, unit: 'px' },
+                    fontWeight: 500,
+                    fontVariantNumeric: 'tabular-nums',
+                    color: this.CONSTANTS.COLOR_TEXT_MAIN,
+                    opacity: 0, 
+                    whiteSpace: 'nowrap',
+                    transition: 'opacity 0.3s ease' 
+                }
+            };
+
+            static DATE_FORMATS = {
+                YEAR: { method: 'getFullYear' },
+                MONTH: { method: 'getMonth', offset: 1, padding: 2 },
+                DAY: { method: 'getDate', padding: 2 },
+                HOUR: { method: 'getHours', padding: 2 },
+                MINUTE: { method: 'getMinutes', padding: 2 },
+                SECOND: { method: 'getSeconds', padding: 2 }
+            };
+        }
+
+        class StyleManager {
+            static apply(element, styles) {
+                const entries = Object.entries(styles);
+                
+                for (let i = 0; i < entries.length; i++) {
+                    const entry = entries[i];
+                    const property = entry[0];
+                    const styleValue = entry[1];
+                    
+                    element.style[property] = this.parseValue(styleValue);
+                }
+            }
+
+            static parseValue(styleValue) {
+                if (styleValue !== null) {
+                    if (typeof styleValue === 'object') {
+                        if ('value' in styleValue) {
+                            const value = styleValue.value;
+                            let unit = '';
+                            
+                            if ('unit' in styleValue) {
+                                unit = styleValue.unit;
+                            }
+                            
+                            return value + unit;
+                        }
+                    }
+                }
+                return styleValue;
+            }
+        }
+
+        class DOMBuilder {
+            constructor(rootId) {
+                this.root = document.getElementById(rootId);
+            }
+
+            create(tagName) {
+                return document.createElement(tagName);
+            }
+
+            append(parent, child) {
+                parent.appendChild(child);
+            }
+
+            getRoot() {
+                return this.root;
+            }
+        }
+
+        class ClockView {
+            constructor(domBuilder) {
+                this.domBuilder = domBuilder;
+                this.timestampElement = null;
+                this.dateElement = null;
+                this.historyContainer = null; 
+                this.lastDateString = ""; 
+                
+                this.renderInitialUI();
+            }
+
+            renderInitialUI() {
+                StyleManager.apply(document.body, Config.STYLES.BODY);
+
+                this.historyContainer = this.domBuilder.create('div');
+                StyleManager.apply(this.historyContainer, Config.STYLES.HISTORY_WRAPPER);
+
+                this.timestampElement = this.domBuilder.create('div');
+                StyleManager.apply(this.timestampElement, Config.STYLES.TIMESTAMP);
+
+                this.dateElement = this.domBuilder.create('div');
+                StyleManager.apply(this.dateElement, Config.STYLES.DATE_INFO);
+
+                const root = this.domBuilder.getRoot();
+                this.domBuilder.append(root, this.historyContainer);
+                this.domBuilder.append(root, this.timestampElement);
+                this.domBuilder.append(root, this.dateElement);
+            }
+
+            updateDisplay(timestamp, dateString) {
+                this.timestampElement.textContent = timestamp;
+                this.dateElement.textContent = dateString;
+            }
+
+            addHistoryTimestamp(timestamp) {
+                const historyItem = this.domBuilder.create('div');
+                historyItem.textContent = timestamp;
+                StyleManager.apply(historyItem, Config.STYLES.HISTORY_ITEM);
+
+                this.historyContainer.appendChild(historyItem);
+                
+                this.updateHistoryOpacity();
+
+                setTimeout(() => {
+                    this.checkHistoryVisibility();
+                }, 100);
+            }
+
+            updateHistoryOpacity() {
+                const items = this.historyContainer.children;
+                const total = items.length;
+                
+                const maxOpacity = 0.6; 
+                const minOpacity = 0.05; 
+                
+                for (let i = 0; i < total; i++) {
+                    const item = items[i];
+                    
+                    let opacity = 0;
+                    
+                    if (total === 1) {
+                         opacity = maxOpacity;
+                    } else {
+                        const ratio = i / (total - 1); 
+                        opacity = minOpacity + (maxOpacity - minOpacity) * ratio;
+                    }
+                    
+                    item.style.opacity = opacity;
+                }
+            }
+
+            checkHistoryVisibility() {
+                const items = this.historyContainer.children;
+                if (items.length > 0) {
+                    const firstItem = items[0]; 
+                    const rect = firstItem.getBoundingClientRect();
+                    
+                    if (rect.right < 0) {
+                        firstItem.remove();
+                    }
+                }
+            }
+
+            showFloatingMessage(text) {
+                const messageElement = this.domBuilder.create('div');
+                messageElement.textContent = text;
+                StyleManager.apply(messageElement, Config.STYLES.FLOATING_MESSAGE);
+
+                const root = this.domBuilder.getRoot();
+                this.domBuilder.append(root, messageElement);
+
+                const animation = messageElement.animate([
+                    { opacity: 0, transform: 'translate(-50%, 0px)' },
+                    { opacity: 1, transform: 'translate(-50%, -10px)', offset: 0.1 },
+                    { opacity: 1, transform: 'translate(-50%, -20px)', offset: 0.8 },
+                    { opacity: 0, transform: 'translate(-50%, -40px)' }
+                ], {
+                    duration: 2500,
+                    easing: 'ease-out'
+                });
+
+                animation.onfinish = function() {
+                    messageElement.remove();
+                };
+            }
+
+            showDropMessage(text) {
+                const messageElement = this.domBuilder.create('div');
+                messageElement.textContent = text;
+                StyleManager.apply(messageElement, Config.STYLES.DROP_MESSAGE);
+
+                const root = this.domBuilder.getRoot();
+                this.domBuilder.append(root, messageElement);
+
+                const animation = messageElement.animate([
+                    { opacity: 0, transform: 'translate(-50%, 20px)' }, 
+                    { opacity: 1, transform: 'translate(-50%, 0px)', offset: 0.2 }, 
+                    { opacity: 1, transform: 'translate(-50%, 0px)', offset: 0.8 }, 
+                    { opacity: 0, transform: 'translate(-50%, -5px)' }   
+                ], {
+                    duration: 2000,
+                    easing: 'ease-in-out'
+                });
+
+                animation.onfinish = function() {
+                    messageElement.remove();
+                };
+            }
+        }
+
+        class ClockContainer {
+            constructor(view) {
+                this.view = view;
+                this.lastHiddenTime = 0; 
+            }
+
+            registerVisibilityHandler() {
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        this.lastHiddenTime = new Date().getTime();
+                    } else {
+                        if (this.lastHiddenTime > 0) {
+                            const currentTime = new Date().getTime();
+                            const timeDiff = currentTime - this.lastHiddenTime;
+                            
+                            const secondsPassed = (timeDiff / 1000).toFixed(1);
+                            
+                            this.view.showFloatingMessage("+" + secondsPassed + "s");
+
+                            this.view.showDropMessage("+" + secondsPassed + "s");
+
+                            this.view.addHistoryTimestamp(this.lastHiddenTime);
+                            
+                            this.lastHiddenTime = 0;
+                        }
+                    }
+                });
+            }
+
+            start() {
+                this.registerVisibilityHandler();
+
+                const animate = () => {
+                    const now = new Date();
+                    const timestamp = now.getTime();
+                    
+                    const dateParts = {};
+                    const formatEntries = Object.entries(Config.DATE_FORMATS);
+                    
+                    for (let i = 0; i < formatEntries.length; i++) {
+                        const entry = formatEntries[i];
+                        const key = entry[0];
+                        const format = entry[1];
+
+                        let dateValue = now[format.method](); 
+                        
+                        if (format.offset !== undefined) {
+                            dateValue = dateValue + format.offset;
+                        }
+                        
+                        if (format.padding !== undefined) {
+                            const stringValue = String(dateValue);
+                            const paddedValue = stringValue.padStart(format.padding, '0');
+                            dateValue = paddedValue;
+                        }
+                        
+                        dateParts[key] = dateValue;
+                    }
+                    
+                    const yearPart = dateParts['YEAR'];
+                    const monthPart = dateParts['MONTH'];
+                    const dayPart = dateParts['DAY'];
+                    const hourPart = dateParts['HOUR'];
+                    const minutePart = dateParts['MINUTE'];
+                    const secondPart = dateParts['SECOND'];
+                    
+                    const dateString = yearPart + "." + monthPart + "." + dayPart + " " + hourPart + ":" + minutePart + ":" + secondPart;
+
+                    this.view.updateDisplay(timestamp, dateString);
+
+                    requestAnimationFrame(animate);
+                };
+
+                requestAnimationFrame(animate);
+            }
+        }
+
+        class App {
+            constructor(rootId) {
+                this.domBuilder = new DOMBuilder(rootId);
+                this.clockView = new ClockView(this.domBuilder);
+                this.clockContainer = new ClockContainer(this.clockView);
+            }
+
+            init() {
+                this.clockContainer.start();
+            }
+        }
+
+        const app = new App('root');
+        app.init();
+    </script>
+</body>
+</html>
